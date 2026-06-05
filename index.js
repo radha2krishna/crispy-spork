@@ -767,10 +767,54 @@ export default {
       });
     }
 
+    // DEBUG: Check webhook info
+    if (pathname === '/debug/webhook' && request.method === 'GET') {
+      try {
+        const response = await fetch(
+          `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo`
+        );
+        const result = await response.json();
+        return new Response(JSON.stringify(result, null, 2), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: e.message }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // DELETE old webhook first
+    if (pathname === '/debug/deletewebhook' && request.method === 'GET') {
+      try {
+        const response = await fetch(
+          `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/deleteWebhook`,
+          { method: 'POST', body: JSON.stringify({}) }
+        );
+        const result = await response.json();
+        return new Response(JSON.stringify({
+          deleted: result.ok,
+          message: 'Webhook deleted. Set a new one now.'
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: e.message }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     // Webhook endpoint for Telegram
     if (pathname === '/webhook' && request.method === 'POST') {
       try {
         const update = await request.json();
+        
+        console.log('Received update:', JSON.stringify(update));
         
         // Auto-subscribe on first message
         if (update.message) {
@@ -786,37 +830,63 @@ export default {
         return new Response('OK', { status: 200 });
       } catch (e) {
         console.error('Webhook error:', e);
-        return new Response('Error', { status: 500 });
+        return new Response('Error: ' + e.message, { status: 500 });
       }
     }
 
-    // Setup webhook endpoint (run this ONCE)
+    // Setup webhook endpoint - NEW METHOD with deleteWebhook first
     if (pathname === '/setup' && request.method === 'POST') {
       try {
         const workerUrl = new URL(request.url);
         const webhookUrl = `${workerUrl.protocol}//${workerUrl.host}/webhook`;
         
-        const response = await fetch(
+        // Step 1: Delete old webhook
+        console.log('Step 1: Deleting old webhook...');
+        const deleteResponse = await fetch(
+          `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/deleteWebhook`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          }
+        );
+        const deleteResult = await deleteResponse.json();
+        console.log('Delete result:', deleteResult);
+        
+        // Wait a bit
+        await new Promise(r => setTimeout(r, 500));
+        
+        // Step 2: Set new webhook
+        console.log('Step 2: Setting new webhook to:', webhookUrl);
+        const setResponse = await fetch(
           `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: webhookUrl }),
+            body: JSON.stringify({ 
+              url: webhookUrl,
+              allowed_updates: ['message', 'callback_query'],
+              drop_pending_updates: true
+            }),
           }
         );
         
-        const result = await response.json();
+        const result = await setResponse.json();
+        console.log('Set webhook result:', result);
+        
         return new Response(JSON.stringify({
           success: result.ok,
           webhook_url: webhookUrl,
-          message: result.ok ? 'Webhook set successfully!' : result.description,
+          delete_ok: deleteResult.ok,
+          message: result.ok ? '✅ Webhook set successfully! Messages should arrive now.' : result.description,
+          description: result.description,
         }), {
           status: result.ok ? 200 : 400,
           headers: { 'Content-Type': 'application/json' },
         });
       } catch (e) {
         console.error('Setup error:', e);
-        return new Response(JSON.stringify({ error: e.message }), {
+        return new Response(JSON.stringify({ error: e.message, stack: e.stack }), {
           status: 500,
           headers: { 'Content-Type': 'application/json' },
         });
@@ -843,15 +913,17 @@ export default {
     // Default response
     return new Response(JSON.stringify({
       status: 'NESTS PDF Scanner Bot Online',
-      version: '2.0.0',
+      version: '2.1.0',
       setup_instructions: 'POST /setup to initialize webhook',
       endpoints: {
         '/health': 'GET - Health check',
-        '/setup': 'POST - Setup Telegram webhook (run ONCE)',
+        '/setup': 'POST - Setup Telegram webhook (DELETE old + SET new)',
         '/webhook': 'POST - Telegram webhook receiver (automatic)',
         '/scan': 'POST - Trigger manual scan (optional)',
+        '/debug/webhook': 'GET - Check webhook info',
+        '/debug/deletewebhook': 'GET - Delete old webhook',
       },
-      todo: 'Token verified - Ready to use!',
+      todo: 'Token and KV binding verified - Ready to use!',
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
