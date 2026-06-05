@@ -4,7 +4,7 @@
  * Setup webhook once, then control everything via Telegram bot
  */
 
-const TELEGRAM_BOT_TOKEN = '8784112496:AAF3mE-HB1_kQ9hD9LglbqVsexEDzixHdgw';
+const TELEGRAM_BOT_TOKEN = '8784112496:AAHGv22hZmnv_JSHh8GmyXQ5dZJTVC12QJ8';
 const BASE_URL = "https://nests.tribal.gov.in/WriteReadData/RTF1984/{}.pdf";
 
 const KNOWN = [
@@ -851,7 +851,7 @@ export default {
         '/webhook': 'POST - Telegram webhook receiver (automatic)',
         '/scan': 'POST - Trigger manual scan (optional)',
       },
-      todo: 'Token and KV binding verified - Ready to use!',
+      todo: 'Token verified - Ready to use!',
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
